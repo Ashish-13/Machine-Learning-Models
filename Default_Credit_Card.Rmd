@@ -1,0 +1,236 @@
+Default of Credit Card
+```{r}
+library(readxl)
+library(naniar) # for gg_miss_var()
+library(ggplot2)
+library(gmodels) # CrossTable()
+library(rockchalk)# combineLevels()
+library(dplyr)
+library(corrplot) #corrplot()
+library(caTools)
+library(e1071)
+#install.packages("DMwR")
+library(DMwR)
+library(caret)
+#install.packages("OneR")
+library(OneR)
+#install.packages(rpart)
+library(rpart)
+#install.packages("rpart.plot")
+library(rpart.plot)
+
+```
+
+```{r}
+ccdata <- read_excel('D:\\Data Mining\\Machine learning\\default of credit card.xls', col_names = TRUE)
+head(ccdata)
+```
+```{r}
+str(ccdata)
+```
+```{r}
+summary(ccdata)
+```
+
+```{r}
+gg_miss_var(ccdata)+ labs(y = 'Missing Values')
+```
+
+Data Cleaning
+```{r}
+#Removing id column 
+ccdata <- ccdata[,-1]
+#Converting some columns to factors
+ccdata[,c(2:4,6:11,24)] <- lapply(ccdata[,c(2:4,6:11,24)], as.factor)
+CrossTable(ccdata$EDUCATION, ccdata$`default payment next month`)
+table(ccdata$EDUCATION)
+```
+
+
+```{r}
+
+#Combining levels 0,5,6 as they represent other &unknown and account for very low values.
+ccdata$EDUCATION <- combineLevels(ccdata$EDUCATION,c('0','4','5','6'), newLabel = 'Other' )
+levels(ccdata$EDUCATION) <- c("GradSchool","University","HighSchool","Other")
+table(ccdata$EDUCATION)
+```
+```{r}
+#
+table(ccdata$SEX)
+#Renaming Sex variable to more understandable format (M, F)
+ccdata = ccdata %>% mutate(SEX = if_else(SEX == '1', "M", "F")) 
+ccdata$SEX <- as.factor(ccdata$SEX)
+table(ccdata$SEX)
+```
+```{r}
+table(ccdata$MARRIAGE)
+CrossTable(ccdata$MARRIAGE, ccdata$`default payment next month`)
+ccdata = ccdata %>% mutate(MARRIAGE = if_else(MARRIAGE == '1', "married",if_else(MARRIAGE == '2', "Single", "Others"))) 
+ccdata$MARRIAGE <- as.factor(ccdata$MARRIAGE)
+levels(ccdata$MARRIAGE)
+table(ccdata$MARRIAGE)
+```
+```{r}
+
+#Renaming levels of Pay variables which represent delay in paymnet.
+table(ccdata$PAY_0)
+levels(ccdata$PAY_0) <- c("Duly","Duly","Duly","Delay1","Delay2","Delay3","Delay4","Delay5","Delay6","Delay7","Delay8" )
+table(ccdata$PAY_0)
+table(ccdata$PAY_2)
+levels(ccdata$PAY_2) <- c("Duly","Duly","Duly","Delay1","Delay2","Delay3","Delay4","Delay5","Delay6","Delay7","Delay8" )
+table(ccdata$PAY_2)
+table(ccdata$PAY_3)
+levels(ccdata$PAY_3) <- c("Duly","Duly","Duly","Delay1","Delay2","Delay3","Delay4","Delay5","Delay6","Delay7","Delay8" )
+table(ccdata$PAY_3)
+table(ccdata$PAY_4)
+levels(ccdata$PAY_4) <- c("Duly","Duly","Duly","Delay1","Delay2","Delay3","Delay4","Delay5","Delay6","Delay7","Delay8" )
+table(ccdata$PAY_4)
+table(ccdata$PAY_5)
+levels(ccdata$PAY_5) <- c("Duly","Duly","Duly","Delay1","Delay2","Delay3","Delay4","Delay5","Delay6","Delay7","Delay8" )
+table(ccdata$PAY_5)
+table(ccdata$PAY_6)
+levels(ccdata$PAY_6) <- c("Duly","Duly","Duly","Delay1","Delay2","Delay3","Delay4","Delay5","Delay6","Delay7","Delay8" )
+table(ccdata$PAY_6)
+
+```
+```{r}
+colnames(ccdata)[24] <- 'Pay_Default'
+ccdata = ccdata %>% mutate(Pay_Default = if_else(Pay_Default == '1', "Yes", "No")) 
+ccdata$Pay_Default <- as.factor(ccdata$Pay_Default)
+ggplot(ccdata, aes(x= Pay_Default)) + geom_bar(fill = '#FF6666') + ggtitle('Payment Default') + coord_flip()
+```
+As evident from the barplot, the output variable is highly unbalanced.
+
+
+```{r}
+ccdata <- ccdata[,c(2:4,6:11,1,5,12:24)]
+View(ccdata)
+ccdata_corr <- ccdata[,10:23]
+corrplot(cor(ccdata_corr),method = 'number', type= 'upper',tl.col = 'black')
+```
+Very low correlation can be observed betweem Bill Amount , Credit Card limit and Payment amount.
+high corrrelation observed among bill amount which is obvious.
+```{r}
+ggplot(ccdata, aes(x = BILL_AMT1)) + geom_histogram() + ggtitle('Bill Amount 1' )
+ggplot(ccdata, aes(x = BILL_AMT2)) + geom_histogram() + ggtitle('Bill Amount 2' )
+ggplot(ccdata, aes(x = BILL_AMT3)) + geom_histogram() + ggtitle('Bill Amount 3' )
+ggplot(ccdata, aes(x = BILL_AMT4)) + geom_histogram() + ggtitle('Bill Amount 4' )
+ggplot(ccdata, aes(x = BILL_AMT5)) + geom_histogram() + ggtitle('Bill Amount 5' )
+ggplot(ccdata, aes(x = BILL_AMT6)) + geom_histogram() + ggtitle('Bill Amount 6' )
+ggplot(ccdata, aes(x = PAY_AMT1)) + geom_histogram() + ggtitle('Paymeny Amount 1')
+ggplot(ccdata, aes(x = PAY_AMT2)) + geom_histogram() + ggtitle('Paymeny Amount 2')
+ggplot(ccdata, aes(x = PAY_AMT3)) + geom_histogram() + ggtitle('Paymeny Amount 3')
+ggplot(ccdata, aes(x = PAY_AMT4)) + geom_histogram() + ggtitle('Paymeny Amount 4')
+ggplot(ccdata, aes(x = PAY_AMT5)) + geom_histogram() + ggtitle('Paymeny Amount 5')
+ggplot(ccdata, aes(x = PAY_AMT6)) + geom_histogram() + ggtitle('Paymeny Amount 6')
+```
+
+#Discretizing continuous variable by using bin function.
+```{r}
+bin_ccdata <- bin(ccdata, nbins = 5, labels = NULL, method ="length", na.omit = TRUE)
+View(bin_ccdata)
+```
+
+
+#Naive Bayes
+```{r}
+
+table(ccdata$Pay_Default)
+set.seed(123)
+split = sample.split(bin_ccdata$Pay_Default, SplitRatio = 0.75)
+cctrain = subset(bin_ccdata, split == TRUE)
+cctest = subset(bin_ccdata, split == FALSE)
+
+classifier = naiveBayes(x = cctrain[-24],
+                        y = cctrain$Pay_Default)
+# Predicting the Test set results
+y_pred = predict(classifier, newdata = cctest[-24])
+# Making the Confusion Matrix
+cm = table(cctest$Pay_Default, y_pred)
+
+confusionMatrix(cctest$Pay_Default, y_pred)
+roc.curve(cctest$Pay_Default, y_pred, plotit = F)
+roc.curve(cctest$Pay_Default, y_pred, plotit = T)
+
+```
+
+```{r}
+set.seed(12)
+split = sample.split(ccdata$Pay_Default, SplitRatio = 0.75)
+cctrain = subset(bin_ccdata, split == TRUE)
+cctest = subset(bin_ccdata, split == FALSE)
+
+ccdata.rose <- ROSE(Pay_Default ~ ., data =cctrain, seed = 12)$data
+table(ccdata.rose$Pay_Default)
+
+classifier2 = naiveBayes(x = ccdata.rose[-24],
+                        y = ccdata.rose$Pay_Default)
+# Predicting the Test set results
+y_pred2 = predict(classifier2, newdata = cctest[-24])
+# Making the Confusion Matrix
+cm2 = table(cctest$Pay_Default, y_pred2)
+confusionMatrix(cctest$Pay_Default, y_pred2)
+roc.curve(cctest$Pay_Default, y_pred2, plotit = F)
+roc.curve(cctest$Pay_Default, y_pred2, plotit = T)
+
+
+
+```
+
+#Decison Tree
+
+```{r}
+
+set.seed(12)
+split = sample.split(ccdata$Pay_Default, SplitRatio = 0.75)
+cctrain = subset(ccdata, split == TRUE)
+cctest = subset(ccdata, split == FALSE)
+
+dtmod <-rpart(Pay_Default ~., cctrain, method = "class",parms = list(split = "information"),
+    control = rpart::rpart.control(
+      cp = 0.01,
+      maxcompete = 3,
+      minbucket = 5,
+      maxsurrogate = 3,
+      xval = 20,
+      maxdepth = 4
+    )
+  )
+
+rpart.plot(decision_tree_model_one)
+
+dtpred <-predict(decision_tree_model_one, newdata = cctest[,-ncol(cctest)], type ="class")
+
+confusionMatrix(factor(dtpred),as.factor(cctest$Pay_Default))
+roc.curve(cctest$Pay_Default, dtpred, plotit = F)
+
+```
+```{r}
+set.seed(12)
+split = sample.split(ccdata$Pay_Default, SplitRatio = 0.75)
+cctrain = subset(ccdata, split == TRUE)
+cctest = subset(ccdata, split == FALSE)
+
+ccdata.rose.rpart <- ROSE(Pay_Default ~ ., data =cctrain, seed = 12)$data
+table(ccdata.rose.rpart$Pay_Default)
+
+#bank.rose as balanced training set
+dtmod_bal <-rpart(Pay_Default ~., ccdata.rose.rpart, method = "class",parms = list(split = "information"),
+    control = rpart::rpart.control(
+      cp = 0.01,
+      maxcompete = 3,
+      minbucket = 5,
+      maxsurrogate = 3,
+      xval = 20,
+      maxdepth = 4
+    )
+  )
+
+dtpred1 <-predict(dtmod_bal, newdata = cctest[,-ncol(cctest)], type ="class")
+
+rpart.plot(dtmod_bal)
+confusionMatrix(factor(dtpred1),as.factor(cctest$Pay_Default))
+roc.curve(cctest$Pay_Default, dtpred1, plotit = T)
+
+```
+

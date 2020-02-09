@@ -1,0 +1,167 @@
+#Market Customer Value
+
+```{r}
+#Importing all the necessary liraries
+
+library(ggplot2)
+library(naniar) # for gg_miss_var()
+library(gmodels) # CrossTable()
+#install.packages("rockchalk")
+library(rockchalk)# combineLevels()
+library(dplyr) # %>%
+library(corrplot) #corrplot()
+library(caTools) # sample.split()
+#install.package('ROSE')
+library(ROSE) #sampling 
+library(e1071) #SVM 
+library(caret)
+#install.packages('Boruta')
+library(Boruta)
+library(plyr)
+library(magrittr)
+install.packages('randomForest')
+library(randomForest)
+library(ROCR)
+```
+
+```{r}
+#Importing data 
+custdata <- read.csv('D:\\Data Mining\\Machine learning\\MarketingCustomerValue.csv', sep = ',', stringsAsFactors = TRUE)
+str(custdata)
+summary(custdata)
+#Rearranging to place response at the last.
+custdata <- custdata[, c(1:3,5:24,4)]
+```
+```{r}
+#Check for missing values 
+
+#Checking for Missing Values
+gg_miss_var(custdata) + labs(y = 'Missing Values')
+
+#No missing value present.
+```
+#Exploratory Data Analysis
+```{r}
+ggplot(custdata, aes(x = Customer.Lifetime.Value)) + geom_histogram() + ggtitle('Customer.Lifetime.Value' )
+ggplot(custdata, aes(x= Income)) + geom_histogram() + ggtitle('Income Distribution' )
+ggplot(custdata, aes(x= Monthly.Premium.Auto)) + geom_histogram() + ggtitle('Monthly.Premium.Auto' )
+ggplot(custdata, aes(x= Months.Since.Last.Claim)) + geom_histogram() + ggtitle('Months.Since.Last.Claim' ) 
+ggplot(custdata, aes(x= Months.Since.Policy.Inception)) + geom_histogram() + ggtitle('Months.Since.Policy.Inception' )
+ggplot(custdata, aes(x = Number.of.Open.Complaints)) + geom_histogram() + ggtitle('Number.of.Open.Complaints' )
+ggplot(custdata, aes(x= Number.of.Policies)) + geom_histogram() + ggtitle('Number.of.Policies' )
+ggplot(custdata, aes(x = Total.Claim.Amount)) + geom_histogram() + ggtitle('Total.Claim.Amount' )
+
+str(custdata)
+#Numerical variable Data in most cases is skewed, hence scaling needs to be done.
+```
+```{r}
+
+ggplot(custdata, aes(x= Customer)) + geom_bar(fill = '#FF6666') + ggtitle('Customer') + coord_flip()
+ggplot(custdata, aes(x= State)) + geom_bar(fill = '#FF6666') + ggtitle('State') + coord_flip()
+ggplot(custdata, aes(x= Coverage)) + geom_bar(fill = '#FF6666') + ggtitle('Coverage') + coord_flip()
+ggplot(custdata, aes(x= Education)) + geom_bar(fill = '#FF6666') + ggtitle('Education') + coord_flip()
+ggplot(custdata, aes(x= EmploymentStatus)) + geom_bar(fill = '#FF6666') + ggtitle('EmploymentStatus') + coord_flip()
+ggplot(custdata, aes(x= Gender)) + geom_bar(fill = '#FF6666') + ggtitle('Gender') + coord_flip()
+ggplot(custdata, aes(x= Location.Code)) + geom_bar(fill = '#FF6666') + ggtitle('Location.Code') + coord_flip()
+ggplot(custdata, aes(x= Marital.Status)) + geom_bar(fill = '#FF6666') + ggtitle('Marital.Status') + coord_flip()
+ggplot(custdata, aes(x= Policy.Type)) + geom_bar(fill = '#FF6666') + ggtitle('Policy.Type') + coord_flip()
+ggplot(custdata, aes(x= Policy)) + geom_bar(fill = '#FF6666') + ggtitle('Policy') + coord_flip()
+ggplot(custdata, aes(x= Renew.Offer.Type)) + geom_bar(fill = '#FF6666') + ggtitle('Renew.Offer.Type') + coord_flip()
+ggplot(custdata, aes(x= Sales.Channel)) + geom_bar(fill = '#FF6666') + ggtitle('Sales.Channel') + coord_flip()
+ggplot(custdata, aes(x= Vehicle.Class)) + geom_bar(fill = '#FF6666') + ggtitle('Vehicle.Class') + coord_flip()
+ggplot(custdata, aes(x= Vehicle.Size)) + geom_bar(fill = '#FF6666') + ggtitle('Vehicle.Size') + coord_flip()
+ggplot(custdata, aes(x= Response)) + geom_bar(fill = '#FF6666') + ggtitle('Response') + coord_flip()
+```
+
+```{r}
+#Dropping customer column as it contains different customer id which is not useful for analysis and also date column.
+
+custdata <- custdata[,-c(1,6)]
+
+#Label Encoding categorical Variables into numbers
+custdata$State <- revalue(custdata$State, c("Arizona"=0, "California"=1, "Nevada" = 2, 'Oregon'= 3, 'Washington'= 4))
+custdata$Coverage <- revalue(custdata$Coverage, c("Basic"=0, "Extended"=1, "Premium" = 2))
+custdata$Education <- revalue(custdata$Education, c("Bachelor"=0, "College"=1, "Doctor" = 2, 'High School or Below'= 3, 'Master'=4))
+custdata$EmploymentStatus <- revalue(custdata$EmploymentStatus, c("Disabled"=0, "Employed"=1, "Medical Leave" = 2, 'Retired'= 3, 'Unemployed'=4))
+custdata$Gender <- revalue(custdata$Gender, c("F"=0, "M"=1))
+custdata$Location.Code <- revalue(custdata$Location.Code, c("Rural"=0, "Suburban"=1, "Urban" = 2))
+custdata$Marital.Status <- revalue(custdata$Marital.Status, c("Divorced"=0, "Married"=1, "Single" = 2))
+custdata$Policy.Type <- revalue(custdata$Policy.Type, c("Corporate Auto"=0, "Personal Auto"=1, "Special Auto" = 2))
+custdata$Policy <- revalue(custdata$Policy, c("Corporate L1"=0, "Corporate L2"=1, "Corporate L3" = 2, 'Personal L1'=3, 'Personal L2'=4, 'Personal L3'=5, 'Special L1'=6, 'Special L2'=7, 'Special L3'=8))
+custdata$Renew.Offer.Type <- revalue(custdata$Renew.Offer.Type, c("Offer1"=0, "Offer2"=1, "Offer3" = 2, 'Offer4'=3))
+custdata$Sales.Channel <- revalue(custdata$Sales.Channel, c("Agent"=0, "Branch"=1, "Call Center" = 2, 'Web'=3))
+custdata$Vehicle.Class <- revalue(custdata$Vehicle.Class, c("Four-Door Car"=0, "Luxury Car"=1, "Luxury SUV" = 2, 'Sports Car'=3, 'SUV'=4, 'Two-Door Car'=5))
+custdata$Vehicle.Size <- revalue(custdata$Vehicle.Size, c("Large"=0, "Medsize"=1, "Small" = 2))
+custdata$Response <- revalue(custdata$Response, c("No"=0, "Yes"=1))
+  
+View(custdata)
+
+
+```
+```{r}
+str(custdata)
+```
+
+
+#Feature selection
+```{r}
+boruta_cust <- Boruta(Response ~ ., data=custdata, doTrace=2)
+boruta_cust
+boruta_signif <- names(boruta_cust$finalDecision[boruta_cust$finalDecision %in% c("Confirmed", "Tentative")])
+print(boruta_signif)
+plot(boruta_cust, cex.axis=.7, las=2, xlab="", main="Variable Importance")
+#Dropping non significant variables 
+custdata <- custdata[, -c(1,15, 16)]
+
+
+```
+Splitting Data in Train and test dataset.
+```{r}
+set.seed(123)
+split = sample.split(custdata$Response ,SplitRatio = 0.80 )
+rftrain = subset(custdata, split == TRUE)
+rftest = subset(custdata, split == FALSE)
+table(training_set$Output)
+
+rftrain[-c(2:5,7,8,14,15,17:19)] = scale(rftrain[-c(2:5,7,8,14,15,17:19)])
+rftest[-c(2:5,7,8,14,15,17:19)] = scale(rftest[-c(2:5,7,8,14,15,17:19)])
+```
+#Implementing Random Forest
+
+```{r}
+
+rfmodel <- randomForest(x = rftrain[-19], 
+                        y = rftrain$Response, 
+                        ntree= 500 )
+
+rfpred = predict(rfmodel, newdata= rftest[-19])
+
+cm = table(rftest$Response, rfpred)
+
+confusionMatrix(rftest$Response, rfpred)
+
+roc.curve(rftest$Response, rfpred, plotit = F)
+roc.curve(rftest$Response, rfpred, plotit = T)
+```
+```{r}
+# Using Rose Sample method
+
+cust.rose <- ROSE(Response ~ ., data =rftrain, seed = 12)$data
+
+
+rfmodel1 <- randomForest(x = cust.rose[-19], 
+                        y = cust.rose$Response, 
+                        ntree= 500 )
+
+rfpred1 = predict(rfmodel1, newdata= rftest[-19])
+
+cm = table(rftest$Response, rfpred1)
+
+confusionMatrix(rftest$Response, rfpred1)
+
+roc.curve(rftest$Response, rfpred1, plotit = F)
+roc.curve(rftest$Response, rfpred, plotit = T)
+
+
+```
+
