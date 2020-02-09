@@ -1,0 +1,284 @@
+Bank Marketing DataSet Analysis
+Bank Direct Telemarketing Dataset
+
+Loading necessary libraries
+```{r}
+library(ggplot2)
+library(naniar) # for gg_miss_var()
+library(gmodels) # CrossTable()
+#install.packages("rockchalk")
+library(rockchalk)# combineLevels()
+library(dplyr) # %>%
+library(corrplot) #corrplot()
+library(caTools) # sample.split()
+#install.package('ROSE')
+library(ROSE) #sampling 
+library(e1071) #SVM 
+library(caret)
+#install.packages('Boruta')
+library(Boruta)
+library(plyr)
+#install.packages("kernlab")
+library(kernlab)
+```
+```{r}
+data1 <- read.csv('D:\\Data Mining\\Machine learning\\bank.csv', sep = ';', stringsAsFactors = TRUE)
+str(data1)
+summary(data1)
+```
+
+```{r}
+#Checking for Missing Values
+gg_miss_var(data1) + labs(y = 'Missing Values')
+
+#In the plot belo, it can be observed that there is no missing values in our dataset.
+```
+
+
+#Data Exploration
+
+First lets look into numerical variables present in the data.
+
+```{r}
+ggplot(data1, aes(x = age)) + geom_histogram() + ggtitle('Age Distribution' )
+ggplot(data1, aes(x= duration)) + geom_histogram() + ggtitle('Duration Distribution' )
+ggplot(data1, aes(x= campaign)) + geom_histogram() + ggtitle('Campaign Distribution' )
+ggplot(data1, aes(x= pdays)) + geom_histogram() + ggtitle('Pdays Distribution' )
+ggplot(data1, aes(x= previous)) + geom_histogram() 
+ggplot(data1, aes(x= emp.var.rate)) + geom_histogram() + ggtitle('Employment Variation Rate' )
+ggplot(data1, aes(x = cons.price.idx)) + geom_histogram() + ggtitle('Consumer Price Index' )
+ggplot(data1, aes(x= cons.conf.idx)) + geom_histogram() + ggtitle('Consumer Confidence Index' )
+ggplot(data1, aes(x = euribor3m)) + geom_histogram() + ggtitle('Euribor 3 month rate' )
+ggplot(data1, aes(x = nr.employed)) + geom_histogram() + ggtitle('No. of Employees' )
+```
+Age is uniformly distributed and variation in the socio - economic variables is observed.
+Duration and default is highly concentrated near 0.
+
+Pdays and previous require more exploration to determine their significance.
+```{r}
+table(data1$pdays)
+```
+Here 999 represents customers were previously not contacted.
+
+
+#Data Exploration Categorical Variables 
+
+Plotting every categorical variable
+```{r}
+ggplot(data1, aes(x= job)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Job Type') + coord_flip()
+ggplot(data1, aes(x= marital)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Marital Status') + coord_flip()
+ggplot(data1, aes(x= education)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Education Level') + coord_flip()
+ggplot(data1, aes(x= default)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Default Status') + coord_flip()
+ggplot(data1, aes(x= housing)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Housing Loan Status') + coord_flip()
+ggplot(data1, aes(x= loan)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Loan Status') + coord_flip()
+ggplot(data1, aes(x= contact)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Contact Type') + coord_flip()
+ggplot(data1, aes(x= month)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Month') + coord_flip()
+ggplot(data1, aes(x= day_of_week)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Day of Week') + coord_flip()
+ggplot(data1, aes(x= poutcome)) + geom_bar(fill = '#FF6666') + ggtitle('Output by Previous Campaign') + coord_flip()
+ggplot(data1, aes(x= y)) + geom_bar(fill = '#FF6666') + ggtitle('Response') + coord_flip()
+```
+Uknown categories is observed in many categorical variables.
+Some categories  are present with very low frequency with respect to other categories.
+Output variable (y) comprises of imbalanced yes and no values.
+
+
+
+Calculating the proportion of levels in each column and concluding suitable actions :
+
+```{r}
+bank <- data1
+
+CrossTable(data1$job,data1$y)
+#From the value table it is observed, a small portion (0.8%) is unknown which can be removed from the dataset.And also, that this variable contains categories that represents the same type of jobs. Providing an opportunity to combine the levels.
+
+bank <- bank[which(bank$job != "unknown"),]
+bank$job <- factor(bank$job)
+
+bank$job <- combineLevels(bank$job,c('entrepreneur','self-employed'), newLabel = 'self-employed' )
+
+bank$job <- combineLevels(bank$job,c('services','housemaid'), newLabel = 'service' )
+bank$job <- revalue(bank$job, c("admin."=0, "blue-collar"=1, "management" = 2, 'retired'= 3, 'student'= 4,'technician'= 5, 'unemployed'= 6,'self-employed'=7,'service'=8))
+table(bank$job)
+```
+```{r}
+CrossTable(data1$marital, data1$y)
+bank <- bank[which(bank$marital != "unknown"),]
+bank$marital <- factor(bank$marital)
+bank$marital <- revalue(bank$marital, c('divorced'= 0,'married' =1, 'single'= 2))
+table(bank$marital)
+```
+
+
+```{r}
+CrossTable(table(data1$education, data1$y))
+bank <- bank[which(bank$education != "illiterate"),]
+bank$education <- combineLevels(bank$education,c('basic.4y','basic.6y','basic.9y'), newLabel = 'middle.school' )
+bank$education <- combineLevels(bank$education,c('unknown','university.degree'), newLabel = 'university.degree' )
+bank$education <- factor(bank$education)
+bank$education <- revalue(bank$education, c('high.school'= 0,'professional.course' =1, 'middle.school'= 2, 'university.degree'= 3))
+table(bank$education)
+```
+Illiterate contribution is insignificant, dropping it would be an better an option.
+But unknown comprises of significant proportion of positive outcomes which are low, hence dropping it would be not a good option for our imbalanced outcome variable. Since unknown is closest to university.degree in terms of contribution, therefore its better to merge these two levels.
+
+```{r}
+CrossTable(data1$default, data1$y)
+bank <- bank[,-c(5,11,15)] #dropping duration and default and poutcome
+```
+There are very few defaulters ,hence it convenient to drop this variable..
+
+```{r}
+CrossTable(data1$housing,data1$y)
+bank <- bank[which(bank$housing != "unknown"),]
+bank$housing <- factor(bank$housing)
+bank$housing <-revalue(bank$housing, c('no'= 0, 'yes'=1))
+table(bank$housing)
+
+```
+Dropping uknown level.
+
+```{r}
+CrossTable(data1$loan,data1$y)
+bank <- bank[which(bank$loan != "unknown"),]
+bank$loan <- factor(bank$loan)
+bank$loan <-revalue(bank$loan, c('no'= 0, 'yes'=1))
+table(bank$loan)
+```
+Dropping unknown level.
+
+```{r}
+CrossTable(data1$contact,data1$y)
+bank$contact <- revalue(bank$contact, c('cellular'= 0, 'telephone'=1))
+bank$contact <- factor(bank$contact)
+table(bank$contact)
+```
+```{r}
+bank$month <- revalue(bank$month, c('mar'= 0,'apr' =1, 'may'= 2, 'jun'= 3,'jul'=4, 'aug'= 5,'sep'= 6, 'oct'= 7, 'nov'=8,'dec'= 9))
+table(bank$month)
+```
+```{r}
+bank$day_of_week <- revalue(bank$day_of_week, c('mon'=0, 'tue'=1, 'wed'=2, 'thu'=3, 'fri'=4))
+bank$day_of_week <- factor(bank$day_of_week)
+prop.table(table(bank$day_of_week))
+```
+```{r}
+bank$y <- revalue(bank$y, c('no'= 0, 'yes'=1))
+prop.table(table(bank$y))
+colnames(bank)[18] <- 'Output'
+str(bank)
+```
+It can be observed that the Outcome variable is heavily biased, it require balancing before prediction.  
+
+
+```{r}
+#campaign represents no. of time a person was contacted in a campaign.
+#lets take 8 as maximum, as more than 8 will be too much. 
+bank <- bank %>% filter(bank$campaign <= 8)
+
+#Binning
+bank = bank %>% mutate(pdays = if_else(pdays == 999, "0", "1")) 
+
+bank = bank %>% mutate(previous = if_else(previous >=  2, 2, if_else(previous == 1, 1, 0))) 
+
+bank$pdays <- as.factor(bank$pdays)
+bank$previous <- as.factor(bank$previous)
+```
+
+
+Checking correlation between numerical variables.
+
+```{r}
+bank_corr <- bank[,c('age','emp.var.rate','cons.price.idx','cons.conf.idx','euribor3m','nr.employed')]
+corrplot(cor(bank_corr),method = 'number', type= 'upper',tl.col = 'black')
+```
+
+emp.var.rate is highly correlated with euribor3m and nr.employed.
+Hence it'll make more sense to drop it and observe the correlation among other variables.
+
+```{r}
+bank_corr <- bank_corr[,-2]
+corrplot(cor(bank_corr),method = 'number', type= 'upper', tl.col = 'black')
+```
+euribor3m and nr.employed are highly correlated but it makes no sense that Euro Interbank Offered Rate can be related with no. of employees. Thus, it's better to keep and observe their affect.
+```{r}
+bank <- bank[,-13] #dropping emp.var.rate
+View(bank)
+str(bank)
+```
+
+#Feature selection using Boruta method
+
+```{r}
+
+boruta_output <- Boruta(Output ~ ., data=bank, doTrace=2)
+boruta_output
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])
+print(boruta_signif)
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Variable Importance")
+
+#Dropping rejected attributes
+bank <- bank[,-c(5,6)]
+
+
+```
+
+Splitting Data in Train and test dataset.
+```{r}
+set.seed(123)
+split = sample.split(bank$Output ,SplitRatio = 0.80 )
+training_set = subset(bank, split == TRUE)
+test_set = subset(bank , split == FALSE)
+table(training_set$Output)
+
+training_set[-c(2:7, 9:10,15)] = scale(training_set[-c(2:7, 9:10,15)])
+test_set[-c(2:7, 9:10,15)] = scale(test_set[-c(2:7, 9:10,15)])
+```
+
+
+Dealing with imbalanced with output using Ros Sampling techniques.
+```{r}
+bank.rose <- ROSE(Output ~ ., data =training_set, seed = 12)$data
+table(bank.rose$Output)
+```
+
+SVM Model Train
+```{r}
+svm.train.radial <- svm(Output ~ ., data = bank.rose, kernel = 'radial', cost = 10, gamma = 1)
+summary(svm.train.radial)
+svm.predict.radial <- predict(svm.train.radial, test_set)
+table(Predicted = svm.predict.radial , Actual = test_set$Output)
+accuracy.meas(test_set$Output, svm.predict.radial)
+roc.curve(test_set$Output, svm.predict.radial, plotit = F)
+confusionMatrix(test_set$Output, svm.predict.radial)
+```
+```{r}
+svm.train.linear <- svm(Output ~ ., data = bank.rose, kernel = 'linear')
+summary(svm.train.linear)
+svm.predict.linear <- predict(svm.train.linear, test_set)
+table(Predicted = svm.predict.linear , Actual = test_set$Output)
+roc.curve(test_set$Output, svm.predict.linear, plotit = F)
+confusionMatrix(test_set$Output, svm.predict.linear)
+```
+```{r}
+svm.train.rbf <- ksvm(Output ~ ., data = bank.rose, kernel = 'rbfdot')
+summary(svm.train.rbf)
+svm.predict.rbf <- predict(svm.train.rbf, test_set)
+table(Predicted = svm.predict.rbf , Actual = test_set$Output)
+confusionMatrix(test_set$Output, svm.predict.rbf)
+roc.curve(test_set$Output, svm.predict.rbf, plotit = T)
+```
+```{r}
+#Logistic regression
+log_reg <- glm(Output ~., ,data = bank.rose, family = 'binomial')
+predict.log <- predict(log_reg, newdata=test_set, type = 'response')
+table(test_set$Output, predict.log>0.5)
+accuracy.meas(test_set$Output, predict.log)
+roc.curve(test_set$Output, predict.log, plotit = F)
+confusionMatrix(factor(test_set$Output ==1), factor(predict.log>0.5))
+```
+```{r}
+#Logistic Reg ROC
+roc.curve(test_set$Output, predict.log, plotit = T)
+```
+
+
